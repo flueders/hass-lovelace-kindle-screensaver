@@ -76,88 +76,6 @@ const batteryStore = {};
     });
   }
 
-  const httpServer = http.createServer(async (request, response) => {
-    // Parse the request
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    // Check the page number
-    const pageNumberStr = url.pathname;
-    // and get the battery level, if any
-    // (see https://github.com/sibbl/hass-lovelace-kindle-screensaver/README.md for patch to generate it on Kindle)
-    const batteryLevel = parseInt(url.searchParams.get("batteryLevel"));
-    const isCharging = url.searchParams.get("isCharging");
-    const pageNumber =
-      pageNumberStr === "/" ? 1 : parseInt(pageNumberStr.substr(1));
-    if (
-      isFinite(pageNumber) === false ||
-      pageNumber > config.pages.length ||
-      pageNumber < 1
-    ) {
-      console.log(`Invalid request: ${request.url} for page ${pageNumber}`);
-      response.writeHead(400);
-      response.end("Invalid request");
-      return;
-    }
-    try {
-      // Log when the page was accessed
-      const n = new Date();
-      console.log(`${n.toISOString()}: Image ${pageNumber} was accessed`);
-
-      const pageIndex = pageNumber - 1;
-      const configPage = config.pages[pageIndex];
-
-      const data = await fs.readFile(configPage.outputPath);
-      const stat = await fs.stat(configPage.outputPath);
-
-      const lastModifiedTime = new Date(stat.mtime).toUTCString();
-
-      response.writeHead(200, {
-        "Content-Type": "image/png",
-        "Content-Length": Buffer.byteLength(data),
-        "Last-Modified": lastModifiedTime
-      });
-      response.end(data);
-
-      let pageBatteryStore = batteryStore[pageIndex];
-      if (!pageBatteryStore) {
-        pageBatteryStore = batteryStore[pageIndex] = {
-          batteryLevel: null,
-          isCharging: false
-        };
-      }
-      if (!isNaN(batteryLevel) && batteryLevel >= 0 && batteryLevel <= 100) {
-        if (batteryLevel !== pageBatteryStore.batteryLevel) {
-          pageBatteryStore.batteryLevel = batteryLevel;
-          console.log(
-            `New battery level: ${batteryLevel} for page ${pageNumber}`
-          );
-        }
-
-        if (
-          (isCharging === "Yes" || isCharging === "1") &&
-          pageBatteryStore.isCharging !== true) {
-          pageBatteryStore.isCharging = true;
-          console.log(`Battery started charging for page ${pageNumber}`);
-        } else if (
-          (isCharging === "No" || isCharging === "0") &&
-          pageBatteryStore.isCharging !== false
-        ) {
-          console.log(`Battery stopped charging for page ${pageNumber}`);
-          pageBatteryStore.isCharging = false;
-        }
-      }
-    } catch (e) {
-      console.error(e);
-      response.writeHead(404);
-      response.end("Image not found");
-    }
-  });
-
-  const port = config.port || 5000;
-  httpServer.listen(port, () => {
-    console.log(`Server is running at ${port}`);
-  });
-})();
-
 async function renderAndConvertAsync(browser) {
   for (let pageIndex = 0; pageIndex < config.pages.length; pageIndex++) {
     const pageConfig = config.pages[pageIndex];
@@ -278,7 +196,7 @@ async function renderUrlToImageAsync(browser, pageConfig, url, path) {
     }
     await page.screenshot({
       path,
-      type: "png",
+      type: "bmp",
       clip: {
         x: 0,
         y: 0,
